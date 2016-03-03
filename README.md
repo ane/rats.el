@@ -1,2 +1,3 @@
-# squeakcheck.el
+# squeak
+
 Manage Go tests inside Emacs
