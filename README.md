@@ -1,6 +1,8 @@
 # squeak.el
 
-Manage Go tests inside Emacs.
+Squeak lets you run Go tests inside emacs, so that you don't need to keep a shell open and run `go
+test` yourself. You can either choose to run a single test or multiple, and the results will be
+displayed in the echo area.
 
 ## Installation
 

@@ -85,9 +85,6 @@
     (push `(failures . ,(how-many-str fail-regexp-no-capture result)) total)))
 
 
-(defun squeak--count-reports (regexp result)
-  "Count the number of times REGEXP matches in RESULT."
-  (cl-count regexp result))
 
 (defun squeak--get-test-results (result &optional test)
   "Check what happened with the RESULT, or if TEST is provided, use that."
@@ -99,31 +96,40 @@
           ((string-match fail-regexp result)
            `((failure . ,(s-chop-prefix " (" (match-string 1))))))))
 
+(defun squeak--failed-p (result-string)
+  "Returns t if running the tests failed for some reason."
+  (or (string-match-p "^can't load package" result-string)
+      (string-match-p "\\(setup\\|build\\) failed" result-string)
+      (string-match-p "cannot find package" result-string)))
+
+(defun squeak--format-failure (result-string)
+  (s-concat
+   "Could not run tests: "
+   (cond ((string-match-p "^can't load package" result-string)
+          "no Go packages found in the current directory.")
+         ((string-match-p "\\(setup\\|build\\) failed" result-string)
+          "building the package failed.")
+         ((string-match-p "cannot find package" result-string)
+          "dependencies are missing. Try running `go get'.")
+         (t "unknown error. See the buffer *squeak-test* for what happened."))))
+
 (defun squeak--run-go-test (&optional test)
-  "Run `go test', or if TEST is provided, run that."
+  "Run `go test', or if TEST is provided, run only that test."
   (let ((go-command (executable-find go-executable-name)))
     (if go-command
-        (let* ((output-buffer-name "*squeak-test*")
-               (errors-buffer-name "*squeak-errors*")
+        (let* ((output-buffer-name "*squeak-test*") 
                (arguments '("test" "-v"))
                (full-args (append arguments )))
-          (dolist (bufname `(,output-buffer-name ,errors-buffer-name))
-            (when (get-buffer bufname)
-              (with-current-buffer (get-buffer bufname)
-                (erase-buffer))))
-          (let ((output-buffer (get-buffer-create output-buffer-name))
-                (errors-buffer (get-buffer-create errors-buffer-name)))
-            (call-process "go"
-                          nil
-                          output-buffer
-                          nil
-                          "test"
-                          "-v"
-                          (or (when (s-present? test) "-run") "")
-                          (or (when (s-present? test) test) ""))
-            (if (< 0 (buffer-size errors-buffer))
-                '(err . "could not run tests, are you in the right directory or is the build working?")
-              (with-current-buffer output-buffer
+          (when (get-buffer output-buffer-name)
+            (with-current-buffer (get-buffer output-buffer-name)
+              (erase-buffer)))
+          (let ((output-buffer (get-buffer-create output-buffer-name)))
+            (call-process "go" nil output-buffer nil "test" "-v"
+                          (if (s-present? test) "-run" "")
+                          (if (s-present? test) test ""))
+            (with-current-buffer output-buffer
+              (if (squeak--failed-p (buffer-string))
+                  `((err . ,(squeak--format-failure (buffer-string))))
                 (if (s-present? test)
                     (squeak--get-test-results (buffer-string) test)  
                   (squeak--parse-results (buffer-string)))))))
@@ -141,7 +147,9 @@
          (let ((time (cdr (assq 'failure result))))
            (message (if (s-present? name)
                         (squeak--colorize (format "Test %s failed in %s." name time) 'squeak-tests-failed)
-                      (squeak--report-multiple result)))))))
+                      (squeak--report-multiple result)))))
+        ((assq 'err result)
+         (message (cdr (assq 'err result))))))
 
 (defun squeak--report-multiple (result)
   "Parse the results of a rich test run in RESULT."
@@ -155,7 +163,7 @@
                           tiem)))))
     (cond ((and (< 0 successes) (= 0 failures))
            (squeak--colorize
-            (format "All tests passed in %ss (%.3f per test)." time (funcall per-test successes))
+            (format "All tests passed in %ss (%.3fs per test)." time (funcall per-test successes))
             'squeak-tests-successful))
           ((and (= 0 successes) (< 0 failures))
            (squeak--colorize
