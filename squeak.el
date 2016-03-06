@@ -27,9 +27,10 @@
 ;; letting you run unit tests from within Emacs itself.
 (require 's)
 (require 'go-mode)
+(require 'cl-lib)
 
 ;;; Code:
-(defconst go-executable-name "go")
+(defconst squeak-go-executable-name "go")
 
 (defgroup squeak nil
   "Options for Squeak."
@@ -47,10 +48,10 @@
   '((default :foreground "black" :background "orange"))
   "The face used for reporting mixed successful and failed tests in the echo area.")
 
-(defconst pass-regexp-no-capture   "^--- PASS:")
-(defconst fail-regexp-no-capture   "^--- FAIL:")
-(defconst pass-regexp-named-with-capture "^--- PASS: %s \\(([^\\)]+?)\\)")
-(defconst fail-regexp-named-with-capture "^--- FAIL: %s \\(([^\\)]+?)\\)")
+(defconst squeak--pass-regexp-no-capture   "^--- PASS:")
+(defconst squeak--fail-regexp-no-capture   "^--- FAIL:")
+(defconst squeak--pass-regexp-named-with-capture "^--- PASS: %s \\(([^\\)]+?)\\)")
+(defconst squeak--fail-regexp-named-with-capture "^--- FAIL: %s \\(([^\\)]+?)\\)")
 
 (defun squeak--inside-test-file-p ()
   "Check whether we are inside a test file."
@@ -67,13 +68,13 @@
 
 ;; I stole this from Stack Overflow
 ;; http://stackoverflow.com/questions/11847547/emacs-regexp-count-occurrences
-(defun how-many-str (regexp str)
+(defun squeak--how-many-str (regexp str)
   "Count how many times REGEXP matched in STR."
-  (loop with start = 0
-        for count from 0
-        while (string-match regexp str start)
-        do (setq start (match-end 0))
-        finally return count))
+  (cl-loop with start = 0
+           for count from 0
+           while (string-match regexp str start)
+           do (setq start (match-end 0))
+           finally return count))
 
 (defun squeak--parse-results (result)
   "Parse the test runner results in RESULT."
@@ -81,16 +82,16 @@
                       `((success . ,(s-trim (match-string 1)))))
                      ((string-match "^FAIL\t+.+?\t\\(.+\\)$" result)
                       `((failure . ,(s-trim (match-string 1))))))))
-    (push `(successes . ,(how-many-str pass-regexp-no-capture result)) total)
-    (push `(failures . ,(how-many-str fail-regexp-no-capture result)) total)))
+    (push `(successes . ,(squeak--how-many-str squeak--pass-regexp-no-capture result)) total)
+    (push `(failures . ,(squeak--how-many-str squeak--fail-regexp-no-capture result)) total)))
 
 
 
 (defun squeak--get-test-results (result &optional test)
   "Check what happened with the RESULT, or if TEST is provided, use that."
   (let* ((test-name   (or test ""))
-         (pass-regexp (format pass-regexp-named-with-capture test-name))
-         (fail-regexp (format fail-regexp-named-with-capture test-name)))
+         (pass-regexp (format squeak--pass-regexp-named-with-capture test-name))
+         (fail-regexp (format squeak--fail-regexp-named-with-capture test-name)))
     (cond ((string-match pass-regexp result)
            `((success . ,(s-chop-prefix " (" (match-string 1)))))
           ((string-match fail-regexp result)
@@ -115,7 +116,7 @@
 
 (defun squeak--run-go-test (&optional test)
   "Run `go test', or if TEST is provided, run only that test."
-  (let ((go-command (executable-find go-executable-name)))
+  (let ((go-command (executable-find squeak-go-executable-name)))
     (if go-command
         (let* ((output-buffer-name "*squeak-test*") 
                (arguments '("test" "-v"))
@@ -133,7 +134,7 @@
                 (if (s-present? test)
                     (squeak--get-test-results (buffer-string) test)  
                   (squeak--parse-results (buffer-string)))))))
-      '(err . (format "`%s' command not found in PATH!" go-executable-name)))))
+      '(err . (format "`%s' command not found in PATH!" squeak-go-executable-name)))))
 
 
 (defun squeak--report-result (result &optional name)
