@@ -6,7 +6,7 @@
 ;; Created: 2016-03-05
 ;; Version: 0.1.0
 ;; Keywords: convenience
-;; Package-Requires: ((s "1.10.0") (go-mode "1.3.1"))
+;; Package-Requires: ((s "1.10.0") (go-mode "1.3.1") (cl-lib "0.5"))
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
