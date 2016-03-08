@@ -132,9 +132,10 @@
               (if (squeak--failed-p (buffer-string))
                   `((err . ,(squeak--format-failure (buffer-string))))
                 (if (s-present? test)
-                    (squeak--get-test-results (buffer-string) test)  
+                    (or (squeak--get-test-results (buffer-string) test)
+                        `((err . ,(format "The test %s was not run." test))))  
                   (squeak--parse-results (buffer-string)))))))
-      '(err . (format "`%s' command not found in PATH!" squeak-go-executable-name)))))
+      `((err . ,(format "`%s' command not found in PATH!" squeak-go-executable-name))))))
 
 
 (defun squeak--report-result (result &optional name)
@@ -150,7 +151,9 @@
                         (squeak--colorize (format "Test %s failed in %s." name time) 'squeak-tests-failed)
                       (squeak--report-multiple result)))))
         ((assq 'err result)
-         (message (cdr (assq 'err result))))))
+         (message (cdr (assq 'err result))))
+        (t
+         (message "An error occurred when running the tests."))))
 
 (defun squeak--report-multiple (result)
   "Parse the results of a rich test run in RESULT."
@@ -204,22 +207,86 @@
             (squeak--report-result result)))
       (message "No test files found in the current directory."))))
 
+(defun squeak--find-tests-in-buffer (&optional buffer)
+  "Find all the tests in BUFFER, or use the current buffer."
+  (let ((reg "^func.*\\(Test\\w+\\)(.*{$")
+        (results '()))
+    (save-excursion
+      (with-current-buffer (or buffer (current-buffer))
+        (progn
+          (goto-char (point-min))
+          (while (re-search-forward reg nil t)
+            (push (match-string-no-properties 1) results))
+          results)))))
+
+(defun squeak--choose-and-run-test (tests sorted)
+  "Pick a test from a TESTS and run it.  
+Present choices sorted alphabetically if SORTED is non-nil."
+  (if (and (listp tests) (< 0 (length tests)))
+      (let ((test-list (if sorted
+                           (sort tests #'s-less-p)
+                         (nreverse tests))))
+        (let ((test (completing-read "Run test: " test-list nil t "Test" nil t)))
+          (when test
+            (squeak--report-result (squeak--run-go-test test) test))))
+    (message "No tests found.")))
+
+(defun squeak-run-test-in-current-buffer (arg)
+  "Run a test from the current buffer, with completion support. 
+With a prefix argument ARG, it sorts the completion list."
+  (interactive "P")
+  (if (squeak--inside-test-file-p)
+      (let ((tests (squeak--find-tests-in-buffer)))
+        (cond ((assq 'err tests) (message (cdr (assq 'err tests))))
+              (t                 (squeak--choose-and-run-test tests arg))))
+    (message "Not inside a Go test file.")))
+
+(defun squeak-run-test-from-package (arg)
+  "Run a test from the current package, with completion support.
+With a prefix argument ARG, sort the completion list alphabetically."
+  (interactive "P")
+  (let ((files (find-lisp-find-files (file-name-directory buffer-file-name) "_test\\.go"))
+        (tests '()))
+    (if (< 0 (length files))
+        (progn
+          (mapc (lambda (file)
+                 (with-temp-buffer
+                   (insert-file-contents file nil nil nil t)
+                   (setq tests (append tests (squeak--find-tests-in-buffer)))))
+                files)
+          (if (< 0 (length tests))
+              (squeak--choose-and-run-test tests arg)
+            (message "No tests found in test files.")))
+      (message "No test files found in current directory."))))
+
+(defun squeak-show-test-buffer ()
+  "Show the test buffer, if one exists."
+  (interactive)
+  (let ((test-buffer (get-buffer "*squeak-test*")))
+    (if test-buffer
+        (switch-to-buffer test-buffer)
+      (message "No test buffer."))))
 
 (defvar squeak-mode-map
   (let ((m (make-sparse-keymap)))
     (define-key m (kbd "C-c C-t t") #'squeak-run-test-under-point)
-    (define-key m (kbd "C-c C-t p") #'squeak-run-tests-for-package)
+    (define-key m (kbd "C-c C-t a") #'squeak-run-tests-for-package)
+    (define-key m (kbd "C-c C-t c") #'squeak-run-test-in-current-buffer)
+    (define-key m (kbd "C-c C-t p") #'squeak-run-test-from-package)
+    (define-key m (kbd "C-c C-t b") #'squeak-show-test-buffer)
     m)
   "Bindings for Squeak minor mode.")
 
-(defvar squeak-mode-menu-map
-  (easy-menu-create-menu
-   "Squeak"
-   '(["Run test at point"                 squeak-run-test-under-point  t]
-     ["Run all tests for current package" squeak-run-tests-for-package t]))
-   "Menu for Squeak minor mode.")
-
-(easy-menu-add-item nil '("Go") squeak-mode-menu-map)
+(easy-menu-define squeak-mode-menu squeak-mode-map
+  "Menu for Squeak."
+  '("Squeak"
+    ["Run test at point"                                 squeak-run-test-under-point  t]
+    ["Run all tests for current package"                 squeak-run-tests-for-package t]
+    ["Choose and run test from this buffer..."           squeak-run-test-in-current-buffer t]
+    ["Choose and run test from package..."               squeak-run-test-from-package t]
+    ["Show test report"                                  squeak-show-test-buffer t]
+    "---"
+    ["Customize squeak-mode"             (customize-group 'squeak) t]))
 
 ;;;###autoload
 (define-minor-mode squeak-mode
