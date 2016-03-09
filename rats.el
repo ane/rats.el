@@ -1,4 +1,4 @@
-;;; squeak.el --- Tools for Go programming
+;;; rats.el --- Rapid testing suite for Go
 
 ;; Copyright (c) 2016 Antoine Kalmbach
 
@@ -23,41 +23,41 @@
 
 ;;; Commentary:
 
-;; Squeak contains tools for running tests in Go programs, e.g.,
+;; rats contains tools for running tests in Go programs, e.g.,
 ;; letting you run unit tests from within Emacs itself.
 (require 's)
 (require 'go-mode)
 (require 'cl-lib)
 
 ;;; Code:
-(defconst squeak-go-executable-name "go")
+(defconst rats-go-executable-name "go")
 
-(defgroup squeak nil
-  "Options for Squeak."
+(defgroup rats nil
+  "Options for rats."
   :group 'convenience)
 
-(defface squeak-tests-successful
+(defface rats-tests-successful
   '((default :foreground "black" :background "green"))
   "The face used for reporting successful tests in the echo area.")
 
-(defface squeak-tests-failed
+(defface rats-tests-failed
   '((default :foreground "white" :background "red"))
   "The face used for reporting failed tests in the echo area.")
 
-(defface squeak-tests-mixed
+(defface rats-tests-mixed
   '((default :foreground "black" :background "orange"))
   "The face used for reporting mixed successful and failed tests in the echo area.")
 
-(defconst squeak--pass-regexp-no-capture   "^--- PASS:")
-(defconst squeak--fail-regexp-no-capture   "^--- FAIL:")
-(defconst squeak--pass-regexp-named-with-capture "^--- PASS: %s \\(([^\\)]+?)\\)")
-(defconst squeak--fail-regexp-named-with-capture "^--- FAIL: %s \\(([^\\)]+?)\\)")
+(defconst rats--pass-regexp-no-capture   "^--- PASS:")
+(defconst rats--fail-regexp-no-capture   "^--- FAIL:")
+(defconst rats--pass-regexp-named-with-capture "^--- PASS: %s \\(([^\\)]+?)\\)")
+(defconst rats--fail-regexp-named-with-capture "^--- FAIL: %s \\(([^\\)]+?)\\)")
 
-(defun squeak--inside-test-file-p ()
+(defun rats--inside-test-file-p ()
   "Check whether we are inside a test file."
   (string-match "_test\\.go" buffer-file-truename))
 
-(defun squeak--get-test-name ()
+(defun rats--get-test-name ()
   "Get the name of test under point."
   (when (go--in-function-p (point))
     (save-excursion
@@ -68,7 +68,7 @@
 
 ;; I stole this from Stack Overflow
 ;; http://stackoverflow.com/questions/11847547/emacs-regexp-count-occurrences
-(defun squeak--how-many-str (regexp str)
+(defun rats--how-many-str (regexp str)
   "Count how many times REGEXP matched in STR."
   (cl-loop with start = 0
            for count from 0
@@ -76,34 +76,34 @@
            do (setq start (match-end 0))
            finally return count))
 
-(defun squeak--parse-results (result)
+(defun rats--parse-results (result)
   "Parse the test runner results in RESULT."
   (let ((total (cond ((string-match "^ok\s+\t+.+?\t\\(.+\\)$" result)
                       `((success . ,(s-trim (match-string 1)))))
                      ((string-match "^FAIL\t+.+?\t\\(.+\\)$" result)
                       `((failure . ,(s-trim (match-string 1))))))))
-    (push `(successes . ,(squeak--how-many-str squeak--pass-regexp-no-capture result)) total)
-    (push `(failures . ,(squeak--how-many-str squeak--fail-regexp-no-capture result)) total)))
+    (push `(successes . ,(rats--how-many-str rats--pass-regexp-no-capture result)) total)
+    (push `(failures . ,(rats--how-many-str rats--fail-regexp-no-capture result)) total)))
 
 
 
-(defun squeak--get-test-results (result &optional test)
+(defun rats--get-test-results (result &optional test)
   "Check what happened with the RESULT, or if TEST is provided, use that."
   (let* ((test-name   (or test ""))
-         (pass-regexp (format squeak--pass-regexp-named-with-capture test-name))
-         (fail-regexp (format squeak--fail-regexp-named-with-capture test-name)))
+         (pass-regexp (format rats--pass-regexp-named-with-capture test-name))
+         (fail-regexp (format rats--fail-regexp-named-with-capture test-name)))
     (cond ((string-match pass-regexp result)
            `((success . ,(s-chop-prefix " (" (match-string 1)))))
           ((string-match fail-regexp result)
            `((failure . ,(s-chop-prefix " (" (match-string 1))))))))
 
-(defun squeak--failed-p (result-string)
+(defun rats--failed-p (result-string)
   "Returns t if running the tests failed for some reason."
   (or (string-match-p "^can't load package" result-string)
       (string-match-p "\\(setup\\|build\\) failed" result-string)
       (string-match-p "cannot find package" result-string)))
 
-(defun squeak--format-failure (result-string)
+(defun rats--format-failure (result-string)
   (s-concat
    "Could not run tests: "
    (cond ((string-match-p "^can't load package" result-string)
@@ -112,13 +112,13 @@
           "building the package failed.")
          ((string-match-p "cannot find package" result-string)
           "dependencies are missing. Try running `go get'.")
-         (t "unknown error. See the buffer *squeak-test* for what happened."))))
+         (t "unknown error. See the buffer *rats-test* for what happened."))))
 
-(defun squeak--run-go-test (&optional test)
+(defun rats--run-go-test (&optional test)
   "Run `go test', or if TEST is provided, run only that test."
-  (let ((go-command (executable-find squeak-go-executable-name)))
+  (let ((go-command (executable-find rats-go-executable-name)))
     (if go-command
-        (let* ((output-buffer-name "*squeak-test*") 
+        (let* ((output-buffer-name "*rats-test*") 
                (arguments '("test" "-v"))
                (full-args (append arguments )))
           (when (get-buffer output-buffer-name)
@@ -129,30 +129,30 @@
                           (if (s-present? test) "-run" "")
                           (if (s-present? test) test ""))
             (with-current-buffer output-buffer
-              (if (squeak--failed-p (buffer-string))
-                  `((err . ,(squeak--format-failure (buffer-string))))
+              (if (rats--failed-p (buffer-string))
+                  `((err . ,(rats--format-failure (buffer-string))))
                 (if (s-present? test)
-                    (squeak--get-test-results (buffer-string) test)  
-                  (squeak--parse-results (buffer-string)))))))
-      '(err . (format "`%s' command not found in PATH!" squeak-go-executable-name)))))
+                    (rats--get-test-results (buffer-string) test)  
+                  (rats--parse-results (buffer-string)))))))
+      '(err . (format "`%s' command not found in PATH!" rats-go-executable-name)))))
 
 
-(defun squeak--report-result (result &optional name)
+(defun rats--report-result (result &optional name)
   "Report the RESULT of a test run.  If NAME is given, then report its results."
   (cond ((assq 'success result)
          (let ((time (cdr (assq 'success result))))
            (message (if (s-present? name)
-                        (squeak--colorize (format "Test %s passed in %s." name time) 'squeak-tests-successful)
-                      (squeak--report-multiple result)))))
+                        (rats--colorize (format "Test %s passed in %s." name time) 'rats-tests-successful)
+                      (rats--report-multiple result)))))
         ((assq 'failure result)
          (let ((time (cdr (assq 'failure result))))
            (message (if (s-present? name)
-                        (squeak--colorize (format "Test %s failed in %s." name time) 'squeak-tests-failed)
-                      (squeak--report-multiple result)))))
+                        (rats--colorize (format "Test %s failed in %s." name time) 'rats-tests-failed)
+                      (rats--report-multiple result)))))
         ((assq 'err result)
          (message (cdr (assq 'err result))))))
 
-(defun squeak--report-multiple (result)
+(defun rats--report-multiple (result)
   "Parse the results of a rich test run in RESULT."
   (let* ((successes (cdr (assq 'successes result)))
          (failures  (cdr (assq 'failures result)))
@@ -163,71 +163,71 @@
                             (/ tiem tests)
                           tiem)))))
     (cond ((and (< 0 successes) (= 0 failures))
-           (squeak--colorize
+           (rats--colorize
             (format "All tests passed in %ss (%.3fs per test)." time (funcall per-test successes))
-            'squeak-tests-successful))
+            'rats-tests-successful))
           ((and (= 0 successes) (< 0 failures))
-           (squeak--colorize
+           (rats--colorize
             (format "All tests failed in %ss (%.3fs per test)." time (funcall per-test failures))
-            'squeak-tests-failed))
+            'rats-tests-failed))
           (t
-           (squeak--colorize
+           (rats--colorize
             (format
              "%s tests passed, %s tests failed in %ss (%.3fs per test)."
              successes failures time (funcall per-test (+ successes failures)))
-            'squeak-tests-mixed)))))
+            'rats-tests-mixed)))))
 
-(defun squeak--colorize (string string-face)
+(defun rats--colorize (string string-face)
   "Set the face of STRING to STRING-FACE."
   (propertize string 'face string-face))
 
-(defun squeak-run-test-under-point ()
+(defun rats-run-test-under-point ()
   "Run the test under point."
   (interactive)
-  (if (squeak--inside-test-file-p)
-      (let ((test-name (squeak--get-test-name)))
+  (if (rats--inside-test-file-p)
+      (let ((test-name (rats--get-test-name)))
         (if test-name
-            (let ((result (squeak--run-go-test test-name)))
+            (let ((result (rats--run-go-test test-name)))
               (message nil)
-              (squeak--report-result result test-name))
+              (rats--report-result result test-name))
           (message "Not inside a test.")))
     (message "Not inside a test file.")))
 
-(defun squeak-run-tests-for-package ()
+(defun rats-run-tests-for-package ()
   "Run all the tests in the directory of the current buffer."
   (interactive)
   (when (buffer-file-name)
     (if (directory-files (file-name-directory (buffer-file-name)) "_test\\.go$")
         (progn
-          (let ((result (squeak--run-go-test)))
+          (let ((result (rats--run-go-test)))
             (message nil)
-            (squeak--report-result result)))
+            (rats--report-result result)))
       (message "No test files found in the current directory."))))
 
 
-(defvar squeak-mode-map
+(defvar rats-mode-map
   (let ((m (make-sparse-keymap)))
-    (define-key m (kbd "C-c C-t t") #'squeak-run-test-under-point)
-    (define-key m (kbd "C-c C-t p") #'squeak-run-tests-for-package)
+    (define-key m (kbd "C-c C-t t") #'rats-run-test-under-point)
+    (define-key m (kbd "C-c C-t p") #'rats-run-tests-for-package)
     m)
-  "Bindings for Squeak minor mode.")
+  "Bindings for rats minor mode.")
 
-(defvar squeak-mode-menu-map
+(defvar rats-mode-menu-map
   (easy-menu-create-menu
-   "Squeak"
-   '(["Run test at point"                 squeak-run-test-under-point  t]
-     ["Run all tests for current package" squeak-run-tests-for-package t]))
-   "Menu for Squeak minor mode.")
+   "rats"
+   '(["Run test at point"                 rats-run-test-under-point  t]
+     ["Run all tests for current package" rats-run-tests-for-package t]))
+   "Menu for rats minor mode.")
 
-(easy-menu-add-item nil '("Go") squeak-mode-menu-map)
+(easy-menu-add-item nil '("Go") rats-mode-menu-map)
 
 ;;;###autoload
-(define-minor-mode squeak-mode
-  "Squeak is a minor mode for running Go tests."
+(define-minor-mode rats-mode
+  "rats is a minor mode for running Go tests."
   :init-value nil
-  :lighter " Sqk"
-  :group 'squeak
-  :keymap squeak-mode-map)
+  :lighter " Rats"
+  :group 'rats
+  :keymap rats-mode-map)
 
-(provide 'squeak-mode)
-;;; squeak.el ends here
+(provide 'rats-mode)
+;;; rats.el ends here
