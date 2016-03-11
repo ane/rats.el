@@ -17,7 +17,7 @@ Once you have installed `rats`, add this to your initialization script:
 ```
 
 Once `go-mode` activates again, you can now access Rats from the menu, or run commands interactively
-(see [Usage](#Usage)).
+(see [Usage](#usage)).
 
 ## Usage
 
