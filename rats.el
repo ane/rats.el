@@ -214,7 +214,7 @@
 
 (defvar rats-mode-menu-map
   (easy-menu-create-menu
-   "rats"
+   "Rats"
    '(["Run test at point"                 rats-run-test-under-point  t]
      ["Run all tests for current package" rats-run-tests-for-package t]))
    "Menu for rats minor mode.")
