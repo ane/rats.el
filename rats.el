@@ -23,13 +23,14 @@
 
 ;;; Commentary:
 
-;; rats contains tools for running tests in Go programs, e.g.,
+;; Rats contains tools for running tests in Go programs, e.g.,
 ;; letting you run unit tests from within Emacs itself.
+
+;;; Code:
 (require 's)
 (require 'go-mode)
 (require 'cl-lib)
 
-;;; Code:
 (defconst rats-go-executable-name "go")
 
 (defgroup rats nil
@@ -98,12 +99,13 @@
            `((failure . ,(s-chop-prefix " (" (match-string 1))))))))
 
 (defun rats--failed-p (result-string)
-  "Returns t if running the tests failed for some reason."
+  "Return t if running the tests in RESULT-STRING failed for some reason."
   (or (string-match-p "^can't load package" result-string)
       (string-match-p "\\(setup\\|build\\) failed" result-string)
       (string-match-p "cannot find package" result-string)))
 
 (defun rats--format-failure (result-string)
+  "Format the failure in RESULT-STRING accordingly."
   (s-concat
    "Could not run tests: "
    (cond ((string-match-p "^can't load package" result-string)
