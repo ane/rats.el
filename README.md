@@ -1,4 +1,6 @@
 # rats.el
+[![MELPA](http://melpa.org/packages/rats-badge.svg)](http://melpa.org/#/rats) [![MELPA Stable](http://stable.melpa.org/packages/rats-badge.svg)](http://stable.melpa.org/#/rats)
+
 
 Rats lets you run Go tests inside emacs, so that you don't need to keep a shell open and run `go
 test` yourself. You can either choose to run a single test or multiple, and the results will be
