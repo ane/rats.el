@@ -295,5 +295,5 @@ With a prefix argument ARG, sort the completion list alphabetically."
   :group 'rats
   :keymap rats-mode-map)
 
-(provide 'rats-mode)
+(provide 'rats)
 ;;; rats.el ends here
