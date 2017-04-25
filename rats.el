@@ -120,7 +120,8 @@
     (if go-command
         (let* ((output-buffer-name "*rats-test*") 
                (arguments '("test" "-v"))
-               (full-args (append arguments )))
+               (full-args (append arguments))
+               (inhibit-read-only t))
           (when (get-buffer output-buffer-name)
             (with-current-buffer (get-buffer output-buffer-name)
               (erase-buffer)))
@@ -134,7 +135,8 @@
                 (if (s-present? test)
                     (or (rats--get-test-results (buffer-string) test)
                         `((err . ,(format "The test %s was not run." test))))  
-                  (rats--parse-results (buffer-string)))))))
+                  (rats--parse-results (buffer-string))))
+              (compilation-mode))))
       `((err . ,(format "`%s' command not found in PATH!" rats-go-executable-name))))))
 
 (defun rats--report-result (result &optional name)
