@@ -130,13 +130,13 @@
                           (if (s-present? test) "-run" "")
                           (if (s-present? test) test ""))
             (with-current-buffer output-buffer
+              (compilation-mode)
               (if (rats--failed-p (buffer-string))
                   `((err . ,(rats--format-failure (buffer-string))))
                 (if (s-present? test)
                     (or (rats--get-test-results (buffer-string) test)
                         `((err . ,(format "The test %s was not run." test))))  
-                  (rats--parse-results (buffer-string))))
-              (compilation-mode))))
+                  (rats--parse-results (buffer-string)))))))
       `((err . ,(format "`%s' command not found in PATH!" rats-go-executable-name))))))
 
 (defun rats--report-result (result &optional name)
